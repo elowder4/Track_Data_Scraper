@@ -1,11 +1,5 @@
-import requests
-import json
 import os
-import csv
-import time
-import sys
-import urllib.request
-from datetime import date
+import datetime
 from dotenv import load_dotenv
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
@@ -14,130 +8,153 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException
-from json import JSONDecoder
 from fake_useragent import UserAgent
 from selenium.webdriver.chrome.service import Service
+import pandas as pd
 
-def wait_for_load(timeout):
-    """Helper function that waits for page to load with a timeout.
-    return: None"""
-    # Wait until the page has completely loaded by waiting for the document ready state
-    wait = WebDriverWait(driver, 10)
-    wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
 
-# Username and password for website - hardcoded for now
-username = ''
-password = ''
+def scrape(username: str, password: str, lists: [str]) -> str:
+    '''Scrapes nscasports webpage by logging in with a given username and password.
+    username: username for login.
+    password: password for login.
+    lists: lists to loop over.
+    output: returns string sucess or failure'''
 
-# Set URL
-url = 'https://coach-x.ncsasports.org/'
+    # Store athlete data
+    data = []
 
-# Load environment variables
-load_dotenv()
+    # Set URL
+    url = 'https://coach-x.ncsasports.org/'
 
-# Set Timout and Wait Time
-timeout = 10
+    try:
+        # Load environment variables
+        load_dotenv()
 
-# Set Chrome options
-chrome_options = Options()
-chrome_options.add_argument("--window-size=1920,1080")
-chrome_options.headless = True
-chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--no-sandbox")
-prefs = {"profile.managed_default_content_settings.images": 2}
-chrome_options.add_experimental_option("prefs", prefs)
+        # Set Timout and Wait Time
+        timeout = 10
 
-# Use a random user agent
-ua = UserAgent()
-userAgent = ua.random
-chrome_options.add_argument(f'user-agent={userAgent}')
+        # Set Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.headless = True
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
+        prefs = {"profile.managed_default_content_settings.images": 2}
+        chrome_options.add_experimental_option("prefs", prefs)
 
-# Initialize the WebDriver
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        # Use a random user agent
+        ua = UserAgent()
+        userAgent = ua.random
+        chrome_options.add_argument(f'user-agent={userAgent}')
 
-driver.get(url)  # Load the page
+        # Initialize the WebDriver
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
-# Log in to the first page
-try:
-    # Find and enter username
-    Username = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.ID, 'username')))
-    Username.send_keys(username)  # send username to input
+        driver.get(url)  # Load the page
 
-    driver.find_element(By.XPATH, "//*[@type='submit']").click()  # Click the submit button
+        # Log in to the first page
 
-except:
-    print("First Page Failed to Load. Please contact Ethan or Joel.")
-    sys.exit()  # Terminate the script execution
+        # Find and enter username
+        username_element = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.ID, 'username')))
+        username_element.send_keys(username)  # send username to input
 
-# Log in to the second page
-try:
-    # Find and enter password
-    Password = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.ID, 'password')))
+        driver.find_element(By.XPATH, "//*[@type='submit']").click()  # Click the submit button
 
-    Password.send_keys(password)
+        #print("First Page Loaded.")
 
-    # Click the submit button
-    driver.find_element(By.XPATH, "//*[@type='submit']").click()
+        # Log in to the second page
 
-except:
-    print("Second Page Failed to Load. Please contact Ethan or Joel.")
-    sys.exit()  # Terminate the script execution
+        # Find and enter password
+        password_element = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.ID, 'password')))
 
-WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[@aria-label='close banner']"))).click()
+        password_element.send_keys(password)
 
-buttonList = driver.find_elements(By.ID, "closeModalBtn")
+        # Click the submit button
+        driver.find_element(By.XPATH, "//*[@type='submit']").click()
 
-# Click two close buttons
-for button in buttonList:
-    driver.execute_script("arguments[0].click();", button) # Force click using JavaScript (idk why)
+        #print("Second Page Loaded.")
 
-print("Failed to Close Surveys. Please contact Ethan or Joel.")
+        WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[@aria-label='close banner']"))).click()
 
-# Go to 'Lists' page
-WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[@href='/lists']"))).click()
+        buttonList = driver.find_elements(By.ID, "closeModalBtn")
 
-# Scrape the webpage
-try:
-    # Once page is loaded, find the list parent div
-    element = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class, 'side-panel__content screen-shell-aside__content')]")))
+        # Click two close buttons
+        for button in buttonList:
+            driver.execute_script("arguments[0].click();", button) # Force click using JavaScript (idk why)
 
-    # Get all list links with the specified class
-    webEleList = element.find_elements(By.TAG_NAME, "a")
+        #print("Closed Surveys.")
 
-    # Loop over each list
-    for webElement in webEleList:
-        print("List Title: ", webElement.text)  # Prints list title
+        # Go to 'Lists' page
+        WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[@href='/lists']"))).click()
 
-        webElement.click()  # Clicks on list
+        # Scrape the webpage
 
-        parentElem = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.CLASS_NAME, "table__body")))
+        # Once page is loaded, find the list parent div
+        element = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class, 'side-panel__content screen-shell-aside__content')]")))
 
-        # Get list of all athlete names
-        athleteList = parentElem.find_elements(By.TAG_NAME, "tr")
+        # Get all anchor links
+        webEleList = element.find_elements(By.TAG_NAME, "a")
 
-        # Loop over each athlete
-        for athlete in athleteList:
-            WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(athlete)).click()
+        # Create a new list to hold the filtered elements
+        filteredList = []
 
-            nameElem = WebDriverWait(athlete, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class, 'focus-ring--active athlete-profile-contact__header--title')]")))
+        # Narrow list to specified names
+        for ele in webEleList:
+            if ele.text in lists:  # Assuming 'lists' is a list or set of valid names
+                filteredList.append(ele)
 
-            print(nameElem.text)
+        # If you want to update 'webEleList' to only include the specified names
+        webEleList = filteredList
 
-            numberElem = athlete.find_element(By.XPATH, "//*[contains(@aria-label, 'Phone')]")
+        # Loop over each list
+        for webElement in webEleList:
+            #print("List Title: ", webElement.text)  # Prints list title
 
-            print(numberElem.text)
+            parentElem = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.CLASS_NAME, "table__body")))
 
-            try:
-                addressElem = athlete.find_element(By.XPATH, "//*[contains(@aria-label, 'Address')]")
-                print(addressElem.text)
-            except NoSuchElementException:
-                print('None')
+            webElement.click()  # Clicks on list
 
-            driver.find_element(By.XPATH, "//*[@aria-label='Close Athlete Profile']").click()
+            # Get list of all athlete names
+            athleteList = parentElem.find_elements(By.TAG_NAME, "tr")
 
-except NoSuchElementException:
-    print("Could not find the div element on the page")
+            # Loop over each athlete
+            for athlete in athleteList:
+                WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(athlete)).click()
 
-finally:
-    # Close the browser
-    driver.quit()
+                nameElem = WebDriverWait(athlete, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class, 'focus-ring--active athlete-profile-contact__header--title')]")))
+
+                numberElem = athlete.find_element(By.XPATH, "//*[contains(@aria-label, 'Phone')]")
+
+                try:
+                    addressElem = athlete.find_element(By.XPATH, "//*[contains(@aria-label, 'Address')]")
+                    entry = {
+                        'Name': nameElem.text,
+                        'Number': numberElem.text,
+                        'Address': addressElem.text
+                    }
+                except NoSuchElementException:
+                    entry = {
+                        'Name': nameElem.text,
+                        'Number': numberElem.text,
+                        'Address': 'None'
+                    }
+
+                # Append data to list
+                data.append(entry)
+
+                driver.find_element(By.XPATH, "//*[@aria-label='Close Athlete Profile']").click()
+
+        # Create a DataFrame from the list of dictionaries
+        df = pd.DataFrame(data)
+
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d")
+        downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads")
+        excel_file_path = os.path.join(downloads_folder, f'athlete_data_{timestamp}.xlsx')
+
+        # Write DataFrame to an Excel file
+        df.to_excel(excel_file_path, index=False, engine='openpyxl')
+
+        return 'success'
+
+    except:
+        return 'failure'
