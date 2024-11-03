@@ -20,13 +20,12 @@ def index():
             return render_template("index.html")
 
         lists = request.form.get('lists')
-        if not lists:
-            flash('You must enter a list to loop over!')
-            return render_template("index.html")
-
-        # Clean and split the lists input
-        loop_lists = [item.strip() for item in lists.split(',')]
-        #print(loop_lists)
+        if lists:
+            # Clean and split the lists input
+            loop_lists = [item.strip() for item in lists.split(',')]
+            #print(loop_lists)
+        else:
+            loop_lists = []
 
         # Call the scraper function with the collected data
         status = scraper.scrape(username, password, loop_lists)
