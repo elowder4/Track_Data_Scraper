@@ -7,26 +7,26 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException
+from selenium.common.exceptions import NoSuchElementException
 from fake_useragent import UserAgent
 from selenium.webdriver.chrome.service import Service
 import pandas as pd
 import time
 
 
-def confirm_clickability(driver, element, timeout_long, timeout, data, attempts = 0, max_attempts = 2):
+def confirm_clickability(driver, element, timeout, data, attempts = 0, max_attempts = 2):
     """Crude function to confirm if an element is clickable. Ran in to many problems with partial loads and
     exceptions."""
     try:
-        WebDriverWait(driver, timeout_long).until(
+        WebDriverWait(driver, timeout).until(
             EC.invisibility_of_element_located(
                 (By.XPATH, "//*[contains(@class, 'm-9814e45f mantine-Overlay-root')]")))
 
         for i in range(2):
-            WebDriverWait(driver, timeout_long).until(
+            WebDriverWait(driver, timeout).until(
                 EC.element_to_be_clickable(element))
 
-            time.sleep(timeout)
+            time.sleep(timeout/2)
 
         return
 
@@ -36,7 +36,7 @@ def confirm_clickability(driver, element, timeout_long, timeout, data, attempts 
             try:
                 driver.refresh()
                 time.sleep(timeout)
-                confirm_clickability(driver, element, timeout_long, timeout, attempts + 1, max_attempts) # Recursive call with incremented attempt count
+                confirm_clickability(driver, element, timeout, attempts + 1, max_attempts) # Recursive call with incremented attempt count
 
             except Exception as e:
                 print('Failure point: confirm_clickability', f'Exception: {e}')
@@ -48,6 +48,14 @@ def confirm_clickability(driver, element, timeout_long, timeout, data, attempts 
 
 def select_lists(driver, timeout, lists):
     """Gets available lists and filters them according to user input."""
+
+    if lists:
+        # Clean and split the lists input
+        clean_lists = [item.strip() for item in lists.split(',')]
+        # print(loop_lists)
+    else:
+        clean_lists = []
+
     # Go to 'Lists' page
     WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, "//*[@href='/lists']"))).click()
 
@@ -61,13 +69,13 @@ def select_lists(driver, timeout, lists):
     anchor_element_list = list_parent_element.find_elements(By.TAG_NAME, "a")
 
     # Scrape selected lists if provided
-    if lists:
+    if clean_lists:
         # Create a new list to hold the filtered elements
         filtered_anchor_list = []
 
         # Narrow list to specified names
         for anchor_element in anchor_element_list:
-            if anchor_element.text.strip() in lists:  # Assuming 'lists' is a list or set of valid names
+            if anchor_element.text.strip() in clean_lists:  # Assuming 'lists' is a list or set of valid names
                 filtered_anchor_list.append(anchor_element)
 
         return filtered_anchor_list
@@ -113,12 +121,13 @@ def close_popups(driver, timeout):
         driver.execute_script("arguments[0].click();",
                               close_button)  # Force click using JavaScript (idk why but it works)
 
-def get_athlete_list(driver, timeout, timeout_long, data):
+
+def get_athlete_list(driver, timeout, data):
     """Retrieves list of elements containing athlete information."""
     check_empty = WebDriverWait(driver, timeout).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '.subheading.subheading--small.result-count')))
 
-    confirm_clickability(driver, check_empty, timeout_long, timeout, data)
+    confirm_clickability(driver, check_empty, timeout, data)
 
     # Need to protect against empty lists
     check_empty = WebDriverWait(driver, timeout).until(
@@ -130,7 +139,7 @@ def get_athlete_list(driver, timeout, timeout_long, data):
     athlete_parent_element = WebDriverWait(driver, timeout).until(
         EC.element_to_be_clickable((By.CLASS_NAME, "table__body")))
 
-    confirm_clickability(driver, athlete_parent_element, timeout_long, timeout, data)
+    confirm_clickability(driver, athlete_parent_element, timeout, data)
 
     # Get list of all athlete names
     WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.TAG_NAME, "tr")))
@@ -145,7 +154,7 @@ def loop_athletes(driver, timeout, list_title, data):
 
     athlete_element_list = athlete_parent_element.find_elements(By.TAG_NAME, "tr")
 
-    print('List: ', list_title, 'Athlete len: ', len(athlete_element_list))
+    #print('List: ', list_title, 'Athlete len: ', len(athlete_element_list))
 
     # Loop over each athlete
     for athlete_element in athlete_element_list:
@@ -192,6 +201,7 @@ def save_data(data):
     # Write DataFrame to an Excel file
     df.to_excel(excel_file_path, index=False, engine='openpyxl')
 
+
 def handle_failure(driver, data):
     """Saves athlete data and exits webdriver."""
 
@@ -199,7 +209,7 @@ def handle_failure(driver, data):
     driver.quit()
 
 
-def scrape(username: str, password: str, lists: [str]) -> str:
+def scrape(username: str, password: str, lists: str) -> str:
     """Scrapes nscasports webpage by logging in with a given username and password.
     username: username for login.
     password: password for login.
@@ -216,14 +226,14 @@ def scrape(username: str, password: str, lists: [str]) -> str:
     load_dotenv()
 
     # Set Timout and Wait Time
-    timeout = 10
-    timeout_long = 30
+    timeout = 20
 
     # Set Chrome options
     chrome_options = Options()
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.headless = True
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--headless") # Make Chrome run in background (no window)
     chrome_options.add_argument("--no-sandbox")
     prefs = {"profile.managed_default_content_settings.images": 2}
     chrome_options.add_experimental_option("prefs", prefs)
@@ -246,6 +256,8 @@ def scrape(username: str, password: str, lists: [str]) -> str:
 
         anchor_element_list = select_lists(driver, timeout, lists)
 
+        #print(len(anchor_element_list))
+
         anchor_element = anchor_element_list[0]
 
         # Loop over each list
@@ -254,24 +266,26 @@ def scrape(username: str, password: str, lists: [str]) -> str:
 
             #print('List Title: ', list_title)
 
-            confirm_clickability(driver, anchor_element, timeout_long, timeout, data)
+            confirm_clickability(driver, anchor_element, timeout, data)
 
             WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(anchor_element)).click()
 
-            confirm_clickability(driver, anchor_element, timeout_long, timeout, data)
+            confirm_clickability(driver, anchor_element, timeout, data)
 
-            athlete_element_list = get_athlete_list(driver, timeout, timeout_long, data)
+            athlete_element_list = get_athlete_list(driver, timeout, data)
 
             if not athlete_element_list:
                 driver.refresh()
-                athlete_element_list = get_athlete_list(driver, timeout, timeout_long, data)
+                athlete_element_list = get_athlete_list(driver, timeout, data)
                 anchor_element_list = select_lists(driver, timeout, lists)
-                anchor_element = anchor_element_list[i + 1]
 
                 if not athlete_element_list:
-                    print('No athletes found. Moving on')
-                    anchor_element = anchor_element_list[i+1]
-                    continue
+                    #print('No athletes found. Moving on')
+                    if i == (len(anchor_element_list) - 1):
+                        pass
+                    else:
+                        anchor_element = anchor_element_list[i + 1]
+                        continue
 
             elif len(athlete_element_list) >= 100:
                 page_parent_element = WebDriverWait(driver, timeout).until(
@@ -286,22 +300,32 @@ def scrape(username: str, password: str, lists: [str]) -> str:
                 for page_element in page_element_list:
                     button = page_element.find_element(By.TAG_NAME, "button")
 
-                    confirm_clickability(driver, page_element, timeout_long, timeout, data)
+                    confirm_clickability(driver, page_element, timeout, data)
 
-                    WebDriverWait(driver, timeout_long).until(EC.element_to_be_clickable(button)).click()
+                    WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(button)).click()
 
                     athlete_parent_element = WebDriverWait(driver, timeout).until(
                         EC.element_to_be_clickable((By.CLASS_NAME, "table__body")))
 
-                    confirm_clickability(driver, athlete_parent_element, timeout_long, timeout, data)
+                    confirm_clickability(driver, athlete_parent_element, timeout, data)
 
                     loop_athletes(driver, timeout, list_title, data) # Loop over each athlete
-                    anchor_element = anchor_element_list[i + 1]
+
+                    if i == (len(anchor_element_list) - 1):
+                        pass
+                    else:
+                        anchor_element = anchor_element_list[i + 1]
+                        continue
 
             else:
                 # Loop over each athlete
                 loop_athletes(driver, timeout, list_title, data)  # Loop over each athlete
-                anchor_element = anchor_element_list[i + 1]
+
+                if i == (len(anchor_element_list) - 1):
+                    pass
+                else:
+                    anchor_element = anchor_element_list[i + 1]
+                    continue
 
         driver.quit()
         save_data(data)
