@@ -21,6 +21,9 @@ Installation instructions go here.
 ## Troubleshooting
 
 If the program fails there are a few things that can be done to troubleshoot.
+- Restart the program or your computer and run it again
 - Check the slow internet box and run the program again
 - Double check that your inputs are correct (list names are a common mistake)
+- Ensure that NSCA.com is accessible in your web browser
+- Wait for some time and try running the program again (a few hours)
 - Call Ethan and tell him his program sucks
