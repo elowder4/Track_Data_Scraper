@@ -1,15 +1,15 @@
-import sys
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QHBoxLayout
-import multiprocessing
-from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QMovie, QFontMetrics
+from PyQt6.QtCore import QTimer, Qt
+import multiprocessing
 import scraper
+import sys
 
 
 # Function to run the scraper in a separate process
 def run_scraper(email, password, lists, queue):
     # Run the scraper function and put the result in the queue
-    status = scraper.scrape(email, password, lists)
+    status = scraper.Scraper(email, password, lists).scrape()
     queue.put(status)  # Send the status back to the main process
 
 
