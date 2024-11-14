@@ -1,15 +1,15 @@
-import sys
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QHBoxLayout
-import multiprocessing
-from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QMovie, QFontMetrics
+from PyQt6.QtCore import QTimer, Qt
+import multiprocessing
 import scraper
+import sys
 
 
 # Function to run the scraper in a separate process
 def run_scraper(email, password, lists, queue):
     # Run the scraper function and put the result in the queue
-    status = scraper.scrape(email, password, lists)
+    status = scraper.Scraper(email, password, lists).scrape()
     queue.put(status)  # Send the status back to the main process
 
 
@@ -31,9 +31,19 @@ def create_gui():
     email.setPlaceholderText("Email")
     layout.addWidget(email)
 
+    # Create a horizontal layout for the password and the toggle button
+    password_layout = QHBoxLayout()
+
+    # Password field with dots
     password = QLineEdit()
     password.setPlaceholderText("Password")
-    layout.addWidget(password)
+    password.setEchoMode(QLineEdit.EchoMode.Password)  # Set the echo mode to Password
+    password_layout.addWidget(password)
+
+    # Create the toggle button
+    toggle_button = QPushButton("Show")
+    password_layout.addWidget(toggle_button)
+    layout.addLayout(password_layout)
 
     lists = QLineEdit()
     lists.setPlaceholderText("Lists to Scrape (list name 1, list name 2, etc.)")
@@ -66,6 +76,17 @@ def create_gui():
     layout.addLayout(result_layout)
     layout.addWidget(status_label)
 
+    # Toggle password visibility
+    def toggle_visibility():
+        if toggle_button.text() == 'Show':
+            password.setEchoMode(QLineEdit.EchoMode.Normal)
+            toggle_button.setText('Hide')
+
+        else:
+            password.setEchoMode(QLineEdit.EchoMode.Password)
+            toggle_button.setText('Show')
+
+
     # Handle the button click
     def on_submit():
         # Get the text from the input fields
@@ -78,6 +99,9 @@ def create_gui():
             # Show a warning message box
             QMessageBox.warning(window, "Input Error", "Email and Password Required!", QMessageBox.StandardButton.Ok)
             return  # Exit the function if inputs are not valid
+
+        # Remove button
+        submit_button.hide()
 
         result_label.setText('Scraper is working. Please wait. This will take 2-20 minutes. BE PATIENT!')
         loading_label.clear()  # Clear the loading label initially
@@ -100,11 +124,18 @@ def create_gui():
         process = multiprocessing.Process(target=run_scraper, args=(value1, value2, value3, queue))
         process.start()
 
+        # Clear inputs for security
+        email.clear()
+        password.clear()
+        lists.clear()
+
         # Check for results while the process is running
         def check_for_result():
             if not queue.empty():
                 status = queue.get()  # Get the result from the queue
                 process.join()  # Wait for the process to finish
+
+                submit_button.show()
 
                 # Update the result label based on the status
                 if status == 'success':
@@ -130,6 +161,8 @@ def create_gui():
 
     # Connect the button's clicked signal to the on_submit function
     submit_button.clicked.connect(on_submit)
+
+    toggle_button.clicked.connect(toggle_visibility)
 
     # Set the layout to the window
     window.setLayout(layout)
