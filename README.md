@@ -4,7 +4,7 @@ This program is intended to scrape data from a user's custom lists of athletes o
 
 ## Installation
 
-Installation instructions go here. 
+To install this app simply download dist/Data Scraper, extract the file, and run the executable within. The program will take a minute to launch. 
 
 ## Tutorial
 
