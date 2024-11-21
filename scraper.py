@@ -1,17 +1,17 @@
-import os
-import datetime
-from dotenv import load_dotenv
-from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.common.exceptions import NoSuchElementException
-from fake_useragent import UserAgent
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from fake_useragent import UserAgent
+from dotenv import load_dotenv
+from selenium import webdriver
 import pandas as pd
+import datetime
 import time
+import os
 
 
 class Scraper:
@@ -29,7 +29,7 @@ class Scraper:
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.headless = True
         chrome_options.add_argument("--disable-dev-shm-usage")
-        #chrome_options.add_argument("--headless")  # Make Chrome run in background (no window)
+        chrome_options.add_argument("--headless")  # Make Chrome run in background (no window)
         chrome_options.add_argument("--no-sandbox")
         prefs = {"profile.managed_default_content_settings.images": 2}
         chrome_options.add_experimental_option("prefs", prefs)
@@ -114,7 +114,7 @@ class Scraper:
                 WebDriverWait(self.driver, self.timeout).until(ec.element_to_be_clickable(element))
                 time.sleep(self.timeout/2)
     
-            return
+            return True
     
         except Exception as e:
             print('Function confirm_clickability entering next iteration', f'Exception: {e}')
@@ -280,7 +280,7 @@ class Scraper:
 
         timestamp = datetime.datetime.now().strftime("%m_%d_%Y")
         downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads")
-        excel_file_path = os.path.join(downloads_folder, f'athlete_self.data_{timestamp}.xlsx')
+        excel_file_path = os.path.join(downloads_folder, f'athlete_data_{timestamp}.xlsx')
 
         # Write self.dataFrame to an Excel file
         df.to_excel(excel_file_path, index=False, engine='openpyxl')
@@ -311,28 +311,28 @@ class Scraper:
 
             anchor_element_list = self.select_lists()
 
+            if self.confirm_clickability({'selector': 'lists','information': "//*[contains(@class, 'side-panel__content screen-shell-aside__content')]",'index': 0}):
+                pass
+            else:
+                anchor_element_list = self.select_lists()  # Update lists to account for reloads
+
             #print(len(anchor_element_list))
 
             # Loop over each list
             for i in range(len(anchor_element_list)):
                 anchor_element = anchor_element_list[i]
-                list_title = anchor_element.text  # Prints list title
+                list_title = anchor_element.text
 
-                print(f'List Title {i}: ', list_title)
-
-                self.confirm_clickability({'selector':'lists','information':"//*[contains(@class, 'side-panel__content screen-shell-aside__content')]",'index':i})
-
-                anchor_element_list = self.select_lists()  # Update lists to account for reloads
-                anchor_element = anchor_element_list[i]
+                #print(f'List Title {i}: ', list_title)
 
                 WebDriverWait(self.driver, self.timeout).until(ec.element_to_be_clickable(anchor_element)).click()
-
-                self.confirm_clickability({'selector':'lists','information':"//*[contains(@class, 'side-panel__content screen-shell-aside__content')]",'index':i})
 
                 athlete_element_list = self.get_athlete_list()
 
                 if not athlete_element_list:
                     self.driver.refresh()
+                    time.sleep(self.timeout)
+
                     athlete_element_list = self.get_athlete_list()
                     anchor_element_list = self.select_lists()
 
@@ -358,11 +358,32 @@ class Scraper:
                     for page_element in page_element_list:
                         button = page_element.find_element(By.TAG_NAME, "button")
 
-                        self.confirm_clickability({'selector':'button','information':'button','index':j})
+                        if self.confirm_clickability({'selector':'button','information':'button','index':j}):
+                            pass
+                        else:
+                            page_parent_element = WebDriverWait(self.driver, self.timeout).until(
+                                ec.element_to_be_clickable((By.CLASS_NAME, "pagination-container")))
+                            page_element_list = page_parent_element.find_elements(By.XPATH,"//*[contains(@class, 'pagination-item')]")
+                            #print(len(page_element_list))
+
+                            # Get rid of arrows
+                            page_element_list.pop(0)
+                            page_element_list.pop(-1)
 
                         WebDriverWait(self.driver, self.timeout).until(ec.element_to_be_clickable(button)).click()
 
-                        self.confirm_clickability({'selector':'class','information':'table__body'})
+                        if self.confirm_clickability({'selector':'class','information':'table__body'}):
+                            pass
+                        else:
+                            page_parent_element = WebDriverWait(self.driver, self.timeout).until(
+                                ec.element_to_be_clickable((By.CLASS_NAME, "pagination-container")))
+                            page_element_list = page_parent_element.find_elements(By.XPATH,
+                                                                                  "//*[contains(@class, 'pagination-item')]")
+                            #print(len(page_element_list))
+
+                            # Get rid of arrows
+                            page_element_list.pop(0)
+                            page_element_list.pop(-1)
 
                         self.loop_athletes(list_title) # Loop over each athlete
 
@@ -388,7 +409,7 @@ class Scraper:
             return 'success'
 
         except Exception as e:
-            print(e)
+            print('Ultimate Failure: ', e)
             self.driver.quit()
             self.save_data()
             return 'failure'

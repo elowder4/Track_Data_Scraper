@@ -4,13 +4,33 @@ from PyQt6.QtCore import QTimer, Qt
 import multiprocessing
 import scraper
 import sys
+import os
 
+
+# Mutex File Path
+MUTEX_FILE = "scraper_mutex.lock"
 
 # Function to run the scraper in a separate process
 def run_scraper(email, password, lists, queue):
     # Run the scraper function and put the result in the queue
     status = scraper.Scraper(email, password, lists).scrape()
     queue.put(status)  # Send the status back to the main process
+
+
+# Function to check if another instance is running
+def is_another_instance_running():
+    return os.path.isfile(MUTEX_FILE)
+
+# Function to create a lock file
+def create_lock_file():
+    with open(MUTEX_FILE, 'w') as f:
+        f.write("locked")
+
+
+# Function to remove the lock file
+def remove_lock_file():
+    if os.path.isfile(MUTEX_FILE):
+        os.remove(MUTEX_FILE)
 
 
 def create_gui():
@@ -81,11 +101,9 @@ def create_gui():
         if toggle_button.text() == 'Show':
             password.setEchoMode(QLineEdit.EchoMode.Normal)
             toggle_button.setText('Hide')
-
         else:
             password.setEchoMode(QLineEdit.EchoMode.Password)
             toggle_button.setText('Show')
-
 
     # Handle the button click
     def on_submit():
@@ -151,7 +169,7 @@ def create_gui():
                     # Create and start the loading animation
                     failure = QMovie("gif/failure.gif")  # Load GIF file
                     status_label.setMovie(failure)
-                    failure.start()  # Start the animation
+                    failure.start()
 
             else:
                 # If the queue is still empty, check again after 100 ms
@@ -161,7 +179,6 @@ def create_gui():
 
     # Connect the button's clicked signal to the on_submit function
     submit_button.clicked.connect(on_submit)
-
     toggle_button.clicked.connect(toggle_visibility)
 
     # Set the layout to the window
@@ -172,6 +189,10 @@ def create_gui():
 
 # Create an instance of QApplication and show the GUI (prevents multiple windows from opening)
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
+
+    create_lock_file()  # Create a lock file
+
     app = QApplication([])
 
     # Create the main window
@@ -181,4 +202,7 @@ if __name__ == '__main__':
     window.show()
 
     # Run application's event loop
-    sys.exit(app.exec())
+    try:
+        sys.exit(app.exec())
+    finally:
+        remove_lock_file()  # Clean up the lock file on exit
